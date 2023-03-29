@@ -102,6 +102,10 @@ double osc(double dHertz, double dTime, int nType = OSC_SINE)
 		return 0.0;
 	}
 }
+// Global synthesizer variables
+atomic<double> dFrequencyOutput = 0.0;			// dominant output frequency of instrument, i.e. the note
+double dOctaveBaseFrequency = 110.0; // A2		// frequency of octave represented by keyboard
+double d12thRootOf2 = pow(2.0, 1.0 / 12.0);		// assuming western 12 notes per ocatve
 
 // Amplitude (Attack, Decay, Sustain, Release) Envelope
 struct sEnvelopeADSR
@@ -130,14 +134,22 @@ struct sEnvelopeADSR
 	// Call when key is pressed
 	void NoteOn(double dTimeOn)
 	{
-		dTriggerOnTime = dTimeOn;
+		if (!bNoteOn)
+		{
+			dTriggerOnTime = dTimeOn;
+			std::wcout << "\rNote On: " << dTimeOn << "s " << dFrequencyOutput << "Hz" << std::endl;
+		}
 		bNoteOn = true;
 	}
 
 	// Call when key is released
 	void NoteOff(double dTimeOff)
 	{
-		dTriggerOffTime = dTimeOff;
+		if (bNoteOn)
+		{
+			dTriggerOffTime = dTimeOff;
+			std::wcout << "\rNote Off: " << dTimeOff << "s " << dFrequencyOutput << "Hz" << std::endl;
+		}
 		bNoteOn = false;
 	}
 
@@ -181,14 +193,7 @@ struct sEnvelopeADSR
 	}
 };
 
-
-
-
-// Global synthesizer variables
-atomic<double> dFrequencyOutput = 0.0;			// dominant output frequency of instrument, i.e. the note
 sEnvelopeADSR envelope;							// amplitude modulation of output to give texture, i.e. the timbre
-double dOctaveBaseFrequency = 110.0; // A2		// frequency of octave represented by keyboard
-double d12thRootOf2 = pow(2.0, 1.0 / 12.0);		// assuming western 12 notes per ocatve
 
 // Function used by olcNoiseMaker to generate sound waves
 // Returns amplitude (-1.0 to +1.0) as a function of time
@@ -233,7 +238,6 @@ int main()
 
 	// Sit in loop, capturing keyboard state changes and modify
 	// synthesizer output accordingly
-	int nCurrentKey = -1;	
 	bool bKeyPressed = false;
 	while (1)
 	{
@@ -242,13 +246,8 @@ int main()
 		{
 			if (GetAsyncKeyState((unsigned char)("ZSXCFVGBNJMK\xbcL\xbe\xbf"[k])) & 0x8000)
 			{
-				if (nCurrentKey != k)
-				{					
-					dFrequencyOutput = dOctaveBaseFrequency * pow(d12thRootOf2, k);
-					envelope.NoteOn(sound.GetTime());
-					wcout << "\rNote On : " << sound.GetTime() << "s " << dFrequencyOutput << "Hz";					
-					nCurrentKey = k;
-				}
+				dFrequencyOutput = dOctaveBaseFrequency * pow(d12thRootOf2, k);
+				envelope.NoteOn(sound.GetTime());
 
 				bKeyPressed = true;
 			}
@@ -256,12 +255,7 @@ int main()
 
 		if (!bKeyPressed)
 		{	
-			if (nCurrentKey != -1)
-			{
-				wcout << "\rNote Off: " << sound.GetTime() << "s                        ";
-				envelope.NoteOff(sound.GetTime());
-				nCurrentKey = -1;
-			}
+			envelope.NoteOff(sound.GetTime());
 		}
 	}
 
